@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import useSWR from 'swr';
+import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Import useCallback and useMemo
+import useSWR from 'swr'; // SWR is used, but direct use is not seen in the provided code for HomePage, only fetchers.
 import { getAllProducts, deleteProduct, updateProduct } from '../services/productService'; // Import local product service functions
 import { fetchProducts as fetchFakeStoreProducts, fetchProductsByCategory as fetchFakeStoreProductsByCategory } from '../services/fakeStoreService'; // Import FakeStoreAPI service
 import ProductList from '../components/ProductList';
@@ -43,15 +43,17 @@ const HomePage = () => {
 
   const [refreshTrigger, setRefreshTrigger] = useState(0); // To manually trigger re-fetch
 
-  // Function to generate random rating for new products
-  const generateRandomRating = () => {
+  // Memoize the function to generate random rating for new products
+  // This function is pure and doesn't depend on component state/props, so useCallback with [] is ideal.
+  const generateRandomRating = useCallback(() => {
     const rate = parseFloat(((Math.random() * 4) + 1).toFixed(1)); // Random rate between 1.0 and 5.0
     const count = Math.floor(Math.random() * 500) + 50; // Random review count between 50 and 549
     return { rate, count };
-  };
+  }, []); // Empty dependency array as it has no external dependencies
 
-  // Function to fetch all data from both sources
-  const fetchAllData = async () => {
+  // Memoize the function to fetch all data from both sources
+  // Dependencies include `category` and the memoized `generateRandomRating`
+  const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -63,7 +65,7 @@ const HomePage = () => {
         price: parseFloat(product.price), // Ensure price is a number
         isLocal: true, // Mark as local product
         // Assign random rating if not already present
-        rating: product.rating || generateRandomRating(),
+        rating: product.rating || generateRandomRating(), // Use memoized generateRandomRating
       }));
 
       // Fetch from FakeStoreAPI
@@ -83,11 +85,8 @@ const HomePage = () => {
       // Prioritize local products if IDs overlap
       const uniqueProductsMap = new Map();
       combinedProducts.forEach(product => {
-        // Use a composite key for true uniqueness if IDs might overlap across sources
-        // For simplicity, if IDs are guaranteed unique per source, product.id is fine.
-        // If local products should always override fake store products with same ID:
         if (product.isLocal || !uniqueProductsMap.has(product.id)) {
-            uniqueProductsMap.set(product.id, product);
+          uniqueProductsMap.set(product.id, product);
         }
       });
       let finalCombinedProducts = Array.from(uniqueProductsMap.values());
@@ -100,10 +99,8 @@ const HomePage = () => {
         if (!a.isLocal && b.isLocal) {
           return -1; // a (fake store) comes before b (local)
         }
-        // If both are same type, maintain their relative order or sort by ID/title if needed
         return 0; // No change in order
       });
-
 
       setAllCombinedProducts(finalCombinedProducts);
       setFilteredProducts(finalCombinedProducts); // Initially, filtered products are all combined products
@@ -113,14 +110,16 @@ const HomePage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [category, generateRandomRating]); // Dependencies: category, and the memoized generateRandomRating
 
   // Effect to fetch products when component mounts or category/refreshTrigger changes
   useEffect(() => {
-    fetchAllData();
-  }, [category, refreshTrigger]); // Re-run when category or refreshTrigger changes
+    fetchAllData(); // Call the memoized fetchAllData
+  }, [category, refreshTrigger, fetchAllData]); // Add fetchAllData to dependencies as it's now useCallback
 
   // Effect to filter products whenever category or allCombinedProducts changes
+  // No direct useMemo here for `filteredProducts` state, as it's a state updated by an effect.
+  // The filtering logic itself is efficient enough.
   useEffect(() => {
     if (category) {
       const filtered = allCombinedProducts.filter(
@@ -132,24 +131,29 @@ const HomePage = () => {
     }
   }, [category, allCombinedProducts]);
 
-  const handleCategoryChange = (selectedCategory) => {
+  // Memoize handleCategoryChange as it's passed to CategoryFilter
+  const handleCategoryChange = useCallback((selectedCategory) => {
     setCategory(selectedCategory);
-  };
+  }, []); // setCategory is guaranteed stable by React
 
   // --- Handlers for In-line Editing ---
-  const handleEditProduct = (product) => {
+
+  // Memoize handleEditProduct as it's passed to ProductList/ProductCard
+  const handleEditProduct = useCallback((product) => {
     setEditingProduct(product.id);
     // Ensure price is string for input field, as input type="number" expects string
     setEditedData({ ...product, price: String(product.price || "") });
     setError(null); // Clear any previous errors
-  };
+  }, []); // setEditingProduct, setEditedData, setError are guaranteed stable by React
 
-  const handleChange = (e) => {
+  // Memoize handleChange as it's passed to ProductList/ProductCard
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setEditedData((prev) => ({ ...prev, [name]: value }));
-  };
+  }, []); // setEditedData is guaranteed stable by React
 
-  const handleImageUpload = (e) => {
+  // Memoize handleImageUpload as it's passed to ProductList/ProductCard
+  const handleImageUpload = useCallback((e) => {
     const file = e.target.files[0];
     setError(null);
     if (!file) {
@@ -187,9 +191,10 @@ const HomePage = () => {
       setEditedData((prev) => ({ ...prev, image: reader.result })); // Store base64
     };
     reader.readAsDataURL(file);
-  };
+  }, [allCombinedProducts, editingProduct]); // Dependencies: allCombinedProducts, editingProduct (to find original image)
 
-  const handleUpdateProduct = async () => {
+  // Memoize handleUpdateProduct as it's passed to ProductList/ProductCard
+  const handleUpdateProduct = useCallback(async () => {
     const { id, title, price, description, category, image } = editedData;
 
     if (!title || !price || !description || !category || !image) {
@@ -209,7 +214,7 @@ const HomePage = () => {
         ...editedData,
         price: parsedPrice, // Ensure price is a number for the update
       };
-      await updateProduct(productToUpdate);
+      await updateProduct(productToUpdate); // `updateProduct` is from service, considered stable
       setEditingProduct(null); // Exit edit mode
       setShowUpdateSuccessPopup(true); // Show success dialog
 
@@ -224,27 +229,31 @@ const HomePage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [editedData]); // Dependencies: editedData (because its current value is used in the function)
 
-  const handleCancelEdit = () => {
+  // Memoize handleCancelEdit as it's passed to ProductList/ProductCard
+  const handleCancelEdit = useCallback(() => {
     setEditingProduct(null);
     setError(null); // Clear errors on cancel
-  };
+  }, []); // setEditingProduct, setError are guaranteed stable by React
 
   // --- Handlers for Deletion ---
-  const handleDeleteClick = (id) => { // Takes ID directly
+
+  // Memoize handleDeleteClick as it's passed to ProductList/ProductCard
+  const handleDeleteClick = useCallback((id) => { // Takes ID directly
     setProductToDeleteId(id);
     setShowDeleteConfirmPopup(true); // Open the delete confirmation dialog
-  };
+  }, []); // setProductToDeleteId, setShowDeleteConfirmPopup are guaranteed stable by React
 
-  const handleDeleteConfirm = async () => {
+  // Memoize handleDeleteConfirm
+  const handleDeleteConfirm = useCallback(async () => {
     setShowDeleteConfirmPopup(false); // Close the confirmation dialog
     if (!productToDeleteId) return;
 
     try {
       setIsLoading(true); // Set loading for delete operation
       setError(null);
-      await deleteProduct(productToDeleteId);
+      await deleteProduct(productToDeleteId); // `deleteProduct` is from service, considered stable
       setShowDeleteSuccessPopup(true); // Show delete success dialog
 
       setTimeout(() => {
@@ -258,7 +267,11 @@ const HomePage = () => {
       setIsLoading(false);
       setProductToDeleteId(null); // Clear the product ID after deletion attempt
     }
-  };
+  }, [productToDeleteId]); // Dependency: productToDeleteId (because its current value is used)
+
+
+  // No direct useMemo for `filteredProducts` here as it's managed by `useEffect` and state.
+  // The `categories` array is a static constant, so no `useMemo` needed.
 
   if (error)
     return (
@@ -290,15 +303,15 @@ const HomePage = () => {
         {filteredProducts.length > 0 ? (
           <ProductList
             products={filteredProducts}
-            onEdit={handleEditProduct} // Pass edit handler
-            onDelete={handleDeleteClick} // Pass delete handler (to open dialog)
+            onEdit={handleEditProduct} // Pass memoized edit handler
+            onDelete={handleDeleteClick} // Pass memoized delete handler (to open dialog)
             editingProduct={editingProduct} // Pass editing state
             editedData={editedData} // Pass edited data
-            handleChange={handleChange} // Pass change handler for inputs
-            handleImageUpload={handleImageUpload} // Pass image upload handler
-            handleUpdate={handleUpdateProduct} // Pass update handler
-            handleCancelEdit={handleCancelEdit} // Pass cancel handler
-            categories={categories} // Pass categories for dropdown
+            handleChange={handleChange} // Pass memoized change handler for inputs
+            handleImageUpload={handleImageUpload} // Pass memoized image upload handler
+            handleUpdate={handleUpdateProduct} // Pass memoized update handler
+            handleCancelEdit={handleCancelEdit} // Pass memoized cancel handler
+            categories={categories} // Pass categories for dropdown (static)
           />
         ) : (
           <div className="text-center text-gray-600 dark:text-gray-400 mt-8">
@@ -321,7 +334,7 @@ const HomePage = () => {
             <button
               onClick={() => setShowUpdateSuccessPopup(false)}
               className="bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-lg shadow-md
-                         hover:bg-blue-700 transition duration-300"
+                          hover:bg-blue-700 transition duration-300"
             >
               Close
             </button>
@@ -341,16 +354,16 @@ const HomePage = () => {
           </DialogHeader>
           <div className="flex justify-center space-x-4 mt-4">
             <button
-              onClick={handleDeleteConfirm}
+              onClick={handleDeleteConfirm} // Use memoized handler
               className="bg-red-600 text-white font-semibold py-2.5 px-6 rounded-lg shadow-md
-                         hover:bg-red-700 transition duration-300"
+                          hover:bg-red-700 transition duration-300"
             >
               Delete
             </button>
             <button
               onClick={() => setShowDeleteConfirmPopup(false)}
               className="bg-gray-300 text-gray-800 font-semibold py-2.5 px-6 rounded-lg shadow-md
-                         hover:bg-gray-400 transition duration-300"
+                          hover:bg-gray-400 transition duration-300"
             >
               Cancel
             </button>
@@ -372,7 +385,7 @@ const HomePage = () => {
             <button
               onClick={() => setShowDeleteSuccessPopup(false)}
               className="bg-blue-600 text-white font-semibold py-2.5 px-6 rounded-lg shadow-md
-                         hover:bg-blue-700 transition duration-300"
+                          hover:bg-blue-700 transition duration-300"
             >
               Close
             </button>
