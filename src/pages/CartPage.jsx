@@ -1,17 +1,33 @@
-import React from "react";
-import { useCartStore } from "../store/cartStore";
+import React, { useMemo, useCallback } from "react"; // Import useMemo and useCallback
+import { useCartStore } from "../Store/cartStore";
 import { useNavigate } from "react-router-dom";
 
 const CartPage = () => {
   // Destructure state and actions from the store
+  // Zustand store actions are already stable, so no need for useCallback here.
   const { cartItems, totalItems, removeFromCart, decreaseQuantity, addToCart, clearCart } = useCartStore();
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // navigate function is stable from React Router
 
-  // Calculate total price of items in the cart
-  const totalPrice = cartItems.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
+  // --- useMemo for total price calculation ---
+  // This ensures totalPrice is only re-calculated when cartItems changes.
+  const totalPrice = useMemo(
+    () => cartItems.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    ),
+    [cartItems] // Dependency array: Recalculate only when cartItems changes
   );
+
+  // --- useCallback for inline event handlers (optional, but good practice) ---
+  const handleImageError = useCallback((e) => {
+    e.target.onerror = null;
+    e.target.src = `https://placehold.co/64x64/cccccc/333333?text=No+Image`;
+  }, []); // Empty dependency array as it doesn't depend on any props or state
+
+  // No specific useCallback needed for the onClick handlers
+  // of decreaseQuantity, addToCart, removeFromCart, clearCart, navigate
+  // because these are all stable functions (from Zustand store or useNavigate hook).
+  // Passing them directly is efficient.
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-10 px-4 sm:px-6 lg:px-8 font-inter">
@@ -65,7 +81,7 @@ const CartPage = () => {
                       src={item.image}
                       alt={item.title}
                       className="w-16 h-16 object-contain rounded-lg border border-gray-200 dark:border-gray-700 p-1 flex-shrink-0"
-                      onError={(e) => { e.target.onerror = null; e.target.src = `https://placehold.co/64x64/cccccc/333333?text=No+Image`; }} // Placeholder
+                      onError={handleImageError} // Use memoized handler
                     />
                     <div className="flex-grow">
                       <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-0.5">
@@ -80,7 +96,7 @@ const CartPage = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-1 flex-shrink-0"> {/* Decreased space-x to space-x-1 */}
+                  <div className="flex items-center space-x-1 flex-shrink-0">
                     {/* Decrease Quantity Button */}
                     <button
                       onClick={() => decreaseQuantity(item.id)}
@@ -164,5 +180,9 @@ const CartPage = () => {
   );
 };
 
-export default CartPage;
+// --- Memoize the CartPage component itself ---
+// This prevents CartPage from re-rendering if its parent re-renders
+// but doesn't pass any new props to CartPage (which is often the case
+// for top-level route components).
+export default React.memo(CartPage);
 
