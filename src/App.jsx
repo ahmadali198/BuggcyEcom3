@@ -1,6 +1,7 @@
 // src/App.js
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+// Remove BrowserRouter as Router from here, as it's already in main.jsx
+import { Routes, Route } from "react-router-dom"; // Only import Routes and Route
 import Navbar from "./components/Navbar"; // Your Navbar component
 import Footer from "./components/Footer"; // Your new Footer component
 import HomePage from "./pages/HomePage";
@@ -14,7 +15,8 @@ console.log("✅ App.jsx rendered");
 
 function App() {
   return (
-    <Router>
+    // Remove the <Router> tags here, as BrowserRouter is already wrapping App in main.jsx
+    <> {/* Use a React Fragment instead */}
       {/* The Navbar is rendered directly here.
           Since it's 'fixed', it will position itself relative to the viewport,
           independent of the document flow and any parent's stacking context. */}
@@ -51,7 +53,7 @@ function App() {
 
         <Footer /> {/* Your Footer component, pushed to the bottom by flex-grow */}
       </div>
-    </Router>
+    </>
   );
 }
 
