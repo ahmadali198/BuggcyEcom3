@@ -23,3 +23,4 @@ export const updateQuantityService = (id, quantity, cart, setCart) => {
   );
   setCart(updated);
 };
+
