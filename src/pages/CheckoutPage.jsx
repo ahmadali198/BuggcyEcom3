@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle, ShoppingCart } from 'lucide-react';
 
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/Dialog';
 
 // Removed: const TAX_RATE = 0.08; // Tax rate removed as per request
 
