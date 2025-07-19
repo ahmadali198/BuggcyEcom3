@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useCartStore } from "../store/cartStore";
+import { useCartStore } from "../Store/cartStore";
 import { Menu, ShoppingCart } from "lucide-react";
 
 const CloseIcon = ({ size = 32, color = "#FFFFFF", className = '', onClick }) => (
